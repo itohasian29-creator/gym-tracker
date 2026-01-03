@@ -3,251 +3,588 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gym Tracker - Progressive Overload</title>
+    <title>Gym Tracker - Calendar Edition</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
         body { font-family: 'Inter', sans-serif; }
-        /* Hilangkan panah pada input number */
-        input::-webkit-outer-spin-button,
-        input::-webkit-inner-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
-        }
-        input[type=number] {
-            -moz-appearance: textfield;
-        }
+        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Calendar Styles */
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+        .calendar-day { aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; cursor: pointer; border-radius: 8px; transition: all 0.2s; }
+        .calendar-day:hover { background-color: rgba(59, 130, 246, 0.2); }
+        .calendar-day.has-data::after { content: ''; position: absolute; bottom: 4px; width: 4px; height: 4px; background-color: #3b82f6; border-radius: 50%; }
+        .calendar-day.selected { background-color: #1d4ed8; color: white; }
+        .calendar-day.today { border: 1px solid #3b82f6; }
+        .calendar-day.empty { pointer-events: none; }
     </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen pb-20">
+<body class="bg-slate-900 text-slate-100 min-h-screen pb-24">
 
     <!-- Header -->
     <header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-50 shadow-lg">
-        <div class="max-w-3xl mx-auto px-4 py-4 flex justify-between items-center">
-            <div>
+        <div class="max-w-3xl mx-auto px-4 py-3">
+            <div class="flex justify-between items-center mb-3">
                 <h1 class="text-xl font-bold text-blue-400"><i class="fas fa-dumbbell mr-2"></i>Gym Tracker</h1>
-                <p class="text-xs text-slate-400">Target: 6-8 Reps (Berat)</p>
+                
+                <div class="flex bg-slate-900 rounded-lg p-1">
+                    <button onclick="switchView('tracker')" id="nav-tracker" class="nav-btn px-3 py-1.5 rounded-md text-xs font-bold transition bg-blue-600 text-white">
+                        <i class="fas fa-edit mr-1"></i> Input
+                    </button>
+                    <button onclick="switchView('journal')" id="nav-journal" class="nav-btn px-3 py-1.5 rounded-md text-xs font-bold transition text-slate-400 hover:text-white">
+                        <i class="fas fa-calendar-alt mr-1"></i> Jurnal
+                    </button>
+                    <button onclick="switchView('graph')" id="nav-graph" class="nav-btn px-3 py-1.5 rounded-md text-xs font-bold transition text-slate-400 hover:text-white">
+                        <i class="fas fa-chart-line mr-1"></i> Grafik
+                    </button>
+                </div>
             </div>
-            <button onclick="downloadCSV()" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm transition font-medium">
-                <i class="fas fa-file-excel mr-1"></i> Save Excel
-            </button>
-        </div>
-        
-        <!-- Day Navigation -->
-        <div class="flex overflow-x-auto bg-slate-800 pb-2 px-2 gap-2 hide-scrollbar justify-start md:justify-center">
-            <button onclick="switchTab('senin')" id="btn-senin" class="tab-btn px-4 py-2 rounded-full text-sm whitespace-nowrap bg-blue-600 text-white font-semibold">Senin (Back)</button>
-            <button onclick="switchTab('selasa')" id="btn-selasa" class="tab-btn px-4 py-2 rounded-full text-sm whitespace-nowrap bg-slate-700 text-slate-300">Selasa (Bahu)</button>
-            <button onclick="switchTab('kamis')" id="btn-kamis" class="tab-btn px-4 py-2 rounded-full text-sm whitespace-nowrap bg-slate-700 text-slate-300">Kamis (Chest)</button>
-            <button onclick="switchTab('jumat')" id="btn-jumat" class="tab-btn px-4 py-2 rounded-full text-sm whitespace-nowrap bg-slate-700 text-slate-300">Jumat (Leg)</button>
+
+            <!-- Day Nav (Only for Tracker View) -->
+            <div id="day-nav" class="flex overflow-x-auto bg-slate-800 pb-1 gap-2 hide-scrollbar">
+                <button onclick="switchDayTab('senin')" id="btn-senin" class="tab-btn px-4 py-2 rounded-full text-sm whitespace-nowrap bg-blue-600 text-white font-semibold shadow-md">Senin</button>
+                <button onclick="switchDayTab('selasa')" id="btn-selasa" class="tab-btn px-4 py-2 rounded-full text-sm whitespace-nowrap bg-slate-700 text-slate-300">Selasa</button>
+                <button onclick="switchDayTab('kamis')" id="btn-kamis" class="tab-btn px-4 py-2 rounded-full text-sm whitespace-nowrap bg-slate-700 text-slate-300">Kamis</button>
+                <button onclick="switchDayTab('jumat')" id="btn-jumat" class="tab-btn px-4 py-2 rounded-full text-sm whitespace-nowrap bg-slate-700 text-slate-300">Jumat</button>
+            </div>
         </div>
     </header>
 
-    <!-- Main Content -->
     <main class="max-w-3xl mx-auto px-4 py-6">
         
-        <div id="workout-container" class="space-y-6">
-            <!-- Content Injected via JS -->
+        <!-- Config Section -->
+        <div id="config-section" class="hidden mb-6 bg-yellow-900/30 border border-yellow-600/50 p-4 rounded-xl">
+            <h3 class="text-yellow-500 font-bold text-sm mb-2"><i class="fas fa-plug mr-2"></i>Setup Koneksi Spreadsheet</h3>
+            <div class="flex gap-2">
+                <input type="text" id="script-url-input" placeholder="https://script.google.com/macros/s/..." class="flex-1 bg-slate-900 border border-slate-600 rounded px-3 py-2 text-xs text-white">
+                <button onclick="saveConfig()" class="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded text-xs font-bold">Simpan</button>
+            </div>
         </div>
 
-        <!-- Note -->
-        <div class="mt-8 p-4 bg-slate-800 rounded-lg border border-slate-700 text-sm text-slate-400">
-            <p class="font-bold text-slate-200 mb-1"><i class="fas fa-info-circle text-blue-400 mr-1"></i> Tips Progressive Overload:</p>
-            <ul class="list-disc list-inside space-y-1 ml-1">
-                <li>Jika bisa angkat > 8 reps dengan mudah, <strong>tambah beban</strong> minggu depan.</li>
-                <li>Istirahat 90-120 detik antar set.</li>
-                <li>Fokus pada teknik (Form) sebelum berat beban.</li>
-            </ul>
+        <!-- VIEW: TRACKER (INPUT SEKARANG) -->
+        <div id="view-tracker" class="view-section block">
+            <div id="workout-container" class="space-y-6"></div>
+            <div class="mt-8 mb-4">
+                <button onclick="saveToJournal()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center text-lg transition transform active:scale-95 group">
+                    <i class="fas fa-cloud-upload-alt mr-2 group-hover:animate-bounce"></i> Simpan Hari Ini
+                </button>
+            </div>
         </div>
 
-        <!-- Reset Button -->
-        <div class="mt-8 text-center">
-             <button onclick="confirmReset()" class="text-red-400 text-xs hover:text-red-300 underline">Reset Semua Data</button>
+        <!-- VIEW: JOURNAL (CALENDAR) -->
+        <div id="view-journal" class="view-section hidden">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-white">Kalender Latihan</h2>
+                <button onclick="toggleConfig()" class="text-slate-500 hover:text-white"><i class="fas fa-cog"></i></button>
+            </div>
+
+            <!-- Date Search Bar -->
+            <div class="bg-slate-800 p-3 rounded-xl mb-4 flex items-center gap-3 border border-slate-700">
+                <i class="fas fa-search text-slate-400"></i>
+                <input type="date" id="date-search" onchange="jumpToDate(this.value)" class="bg-transparent text-white text-sm w-full outline-none placeholder-slate-500">
+            </div>
+            
+            <!-- Calendar Controls -->
+            <div class="flex justify-between items-center mb-4 bg-slate-800 p-3 rounded-xl border border-slate-700">
+                <button onclick="changeMonth(-1)" class="text-slate-300 hover:text-white w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-700"><i class="fas fa-chevron-left"></i></button>
+                <h3 id="calendar-month-year" class="text-lg font-bold text-blue-400">January 2026</h3>
+                <button onclick="changeMonth(1)" class="text-slate-300 hover:text-white w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-700"><i class="fas fa-chevron-right"></i></button>
+            </div>
+
+            <!-- Calendar Grid -->
+            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg">
+                <div class="grid grid-cols-7 gap-4 mb-2 text-center text-xs font-bold text-slate-500 uppercase">
+                    <div>Min</div><div>Sen</div><div>Sel</div><div>Rab</div><div>Kam</div><div>Jum</div><div>Sab</div>
+                </div>
+                <div id="calendar-grid" class="calendar-grid">
+                    <!-- Days injected via JS -->
+                </div>
+            </div>
+
+             <div class="mt-8 text-center flex justify-center gap-4">
+                <button onclick="syncAllData()" class="text-blue-500 text-xs hover:text-blue-400 opacity-60 hover:opacity-100 transition"><i class="fas fa-sync mr-1"></i> Sync Semua</button>
+                <button onclick="clearHistory()" class="text-red-500 text-xs hover:text-red-400 opacity-60 hover:opacity-100 transition"><i class="fas fa-trash mr-1"></i> Reset Lokal</button>
+           </div>
         </div>
+
+        <!-- VIEW: GRAPH -->
+        <div id="view-graph" class="view-section hidden">
+            <h2 class="text-2xl font-bold text-white mb-4">Grafik Progres</h2>
+            <div class="bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700 mb-6">
+                <label class="block text-xs text-slate-400 uppercase font-bold mb-2">Pilih Gerakan:</label>
+                <select id="exercise-select" onchange="updateChart()" class="w-full bg-slate-900 text-white p-3 rounded-lg border border-slate-600 focus:border-blue-500 outline-none"></select>
+            </div>
+            <div class="bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700 relative h-80">
+                <canvas id="progressChart"></canvas>
+            </div>
+        </div>
+
     </main>
 
+    <!-- POPUP MODAL UNTUK ISI/EDIT DATA -->
+    <div id="entry-modal" class="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm hidden flex items-end sm:items-center justify-center transition-opacity duration-300 opacity-0 overflow-y-auto">
+        <div class="bg-slate-900 border border-slate-700 rounded-t-2xl sm:rounded-2xl w-full max-w-2xl mx-auto shadow-2xl transform transition-transform duration-300 translate-y-full sm:translate-y-0 scale-95 sm:scale-100 flex flex-col max-h-[90vh]">
+            
+            <!-- Modal Header -->
+            <div class="p-4 border-b border-slate-700 bg-slate-800 flex justify-between items-center sticky top-0 z-10 rounded-t-2xl">
+                <div>
+                    <h3 class="text-lg font-bold text-white" id="modal-date-title">Senin, 12 Jan 2026</h3>
+                    <p class="text-xs text-slate-400">Edit / Input Manual</p>
+                </div>
+                <button onclick="closeEntryModal()" class="text-slate-400 hover:text-white p-2 rounded-full hover:bg-slate-700"><i class="fas fa-times text-xl"></i></button>
+            </div>
+
+            <!-- Modal Content (Scrollable) -->
+            <div class="p-4 overflow-y-auto flex-1">
+                <!-- Select Routine Type -->
+                <div class="mb-4">
+                    <label class="block text-xs text-slate-400 uppercase font-bold mb-2">Jenis Latihan Hari Ini:</label>
+                    <select id="modal-routine-select" onchange="renderModalForm()" class="w-full bg-slate-800 text-white p-3 rounded-lg border border-slate-600 focus:border-blue-500 outline-none">
+                        <option value="senin">Back & Triceps</option>
+                        <option value="selasa">Shoulders & Forearm</option>
+                        <option value="kamis">Chest & Biceps</option>
+                        <option value="jumat">Legs & Abs</option>
+                    </select>
+                </div>
+
+                <!-- Dynamic Form Container -->
+                <div id="modal-form-container" class="space-y-4">
+                    <!-- Form injected here -->
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="p-4 border-t border-slate-700 bg-slate-800 sticky bottom-0 z-10 rounded-b-2xl">
+                <button onclick="saveEntryFromModal()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl shadow-lg flex items-center justify-center gap-2">
+                    <i class="fas fa-save"></i> Simpan Perubahan
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SIMPLE CONFIRM MODAL (For 'Save Today') -->
+    <div id="custom-save-modal" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+            <div class="text-center">
+                <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-blue-900/30 mb-4 ring-4 ring-blue-900/20"><i class="fas fa-save text-3xl text-blue-400 animate-pulse"></i></div>
+                <h3 class="text-xl font-bold text-white mb-2">Simpan Latihan?</h3>
+                <p class="text-slate-400 text-sm mb-6">Simpan data hari ini (<span id="modal-day-name" class="font-bold text-blue-400 uppercase">SENIN</span>)?</p>
+                <div class="grid grid-cols-2 gap-3">
+                    <button onclick="closeSaveModal()" class="px-4 py-3 rounded-xl border border-slate-700 text-slate-400 hover:text-white">Batal</button>
+                    <button onclick="executeSave()" class="px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold">Ya, Simpan</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-slate-800 border border-green-500 text-white px-4 py-2 rounded-lg shadow-2xl opacity-0 transition-opacity duration-300 pointer-events-none z-[110] flex items-center gap-2 w-max max-w-[90%]">
+        <i class="fas fa-check-circle text-green-500"></i><span id="toast-msg" class="text-xs font-bold">Berhasil!</span>
+    </div>
+
     <script>
-        // Data Structure based on User Prompt
+        // --- CONFIGURATION ---
+        let SCRIPT_URL = localStorage.getItem('gymScriptUrl') || "";
+        
+        // --- DATA SETUP ---
         const schedule = {
-            senin: {
-                title: "Back & Triceps",
-                exercises: [
-                    "Pemanasan (Stretching)",
-                    "Lat Pull Down",
-                    "Rowing Bar (bisa + Trap)",
-                    "Lat Pull Over (Grip Lebar)",
-                    "Tricep: Skull Crusher",
-                    "Tricep: Cable Pushdown"
-                ]
-            },
-            selasa: {
-                title: "Shoulders & Forearm",
-                exercises: [
-                    "Shoulder Press (Depan)",
-                    "Cable Lateral Raise",
-                    "Face Pull (Bahu Belakang)",
-                    "Forearm Curl (Depan)",
-                    "Reverse Wrist Curl (Belakang)"
-                ]
-            },
-            kamis: {
-                title: "Chest & Biceps",
-                exercises: [
-                    "Flat Bench (Dumbbell/Smith)",
-                    "Incline Bench",
-                    "Cable Fly",
-                    "Dumbbell Fly",
-                    "Bicep Curl V1",
-                    "Bicep Curl V2 (Hammer)"
-                ]
-            },
-            jumat: {
-                title: "Legs & Abs",
-                exercises: [
-                    "Squat",
-                    "Leg Extension",
-                    "Hamstring Curl",
-                    "Hip Dips / Glutes",
-                    "Calf Raise",
-                    "Abs (Perut)"
-                ]
-            }
+            senin: { title: "Back & Triceps", exercises: [ "Pemanasan", "Lat Pull Down", "Rowing Bar", "Lat Pull Over", "Skull Crusher", "Cable Pushdown" ] },
+            selasa: { title: "Shoulders & Forearm", exercises: [ "Shoulder Press", "Cable Lat Raise", "Face Pull", "Forearm Curl", "Rev Wrist Curl" ] },
+            kamis: { title: "Chest & Biceps", exercises: [ "Flat Bench", "Incline Bench", "Cable Fly", "Dumbbell Fly", "Bicep Curl V1", "Hammer Curl" ] },
+            jumat: { title: "Legs & Abs", exercises: [ "Squat", "Leg Extension", "Hamstring Curl", "Hip Dips", "Calf Raise", "Abs Exercise" ] }
         };
 
         let currentDay = 'senin';
         let workoutData = JSON.parse(localStorage.getItem('gymTrackerData')) || {};
+        let historyData = JSON.parse(localStorage.getItem('gymTrackerHistory')) || [];
+        let chartInstance = null;
+        
+        // Calendar State
+        let calDate = new Date();
+        let selectedModalDate = null; // Date object for the modal
+        let tempModalData = {}; // Temporary data storage for the modal inputs
 
-        // Initialize
         function init() {
-            renderWorkout(currentDay);
+            renderWorkout(currentDay, 'workout-container', workoutData, true); // True = auto save to global workoutData
+            renderCalendar();
+            populateExerciseSelect();
+            if(!SCRIPT_URL) document.getElementById('config-section').classList.remove('hidden');
         }
 
-        function switchTab(day) {
-            currentDay = day;
+        // --- CALENDAR LOGIC ---
+        function renderCalendar() {
+            const year = calDate.getFullYear();
+            const month = calDate.getMonth();
             
-            // Update Tab Styles
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.classList.remove('bg-blue-600', 'text-white', 'font-semibold');
-                btn.classList.add('bg-slate-700', 'text-slate-300');
+            // Header
+            const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+            document.getElementById('calendar-month-year').innerText = `${months[month]} ${year}`;
+
+            // Logic Days
+            const firstDay = new Date(year, month, 1).getDay(); // 0 = Sunday
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const grid = document.getElementById('calendar-grid');
+            grid.innerHTML = "";
+
+            // Empty slots before 1st day
+            for(let i=0; i<firstDay; i++) {
+                grid.innerHTML += `<div class="calendar-day empty"></div>`;
+            }
+
+            // Days
+            for(let d=1; d<=daysInMonth; d++) {
+                const dateStr = new Date(year, month, d).toDateString();
+                const todayStr = new Date().toDateString();
+                
+                // Check if history exists
+                const hasData = historyData.some(h => new Date(h.date).toDateString() === dateStr);
+                
+                let classes = "calendar-day bg-slate-800/50 text-slate-300";
+                if(dateStr === todayStr) classes += " today font-bold text-white";
+                if(hasData) classes += " has-data";
+
+                grid.innerHTML += `<div class="${classes}" onclick="openEntryModal(${year}, ${month}, ${d})">
+                    <span class="text-sm">${d}</span>
+                </div>`;
+            }
+        }
+
+        function changeMonth(delta) {
+            calDate.setMonth(calDate.getMonth() + delta);
+            renderCalendar();
+        }
+
+        function jumpToDate(val) {
+            if(!val) return;
+            const parts = val.split('-');
+            const y = parseInt(parts[0]);
+            const m = parseInt(parts[1]) - 1;
+            const d = parseInt(parts[2]);
+            
+            // Set calendar view to that month
+            calDate = new Date(y, m, 1);
+            renderCalendar();
+            
+            // Open modal immediately
+            openEntryModal(y, m, d);
+        }
+
+        // --- MODAL ENTRY / EDIT LOGIC ---
+        function openEntryModal(year, month, day) {
+            selectedModalDate = new Date(year, month, day);
+            const dateKey = selectedModalDate.toDateString();
+            
+            // Title
+            const options = { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' };
+            document.getElementById('modal-date-title').innerText = selectedModalDate.toLocaleDateString('id-ID', options);
+
+            // Check if data exists in history
+            const existingEntry = historyData.find(h => new Date(h.date).toDateString() === dateKey);
+
+            if(existingEntry) {
+                // LOAD EXISTING DATA
+                tempModalData = {}; // Reset temp
+                // Map history structure back to flat key-value for inputs
+                existingEntry.data.forEach((ex, exIdx) => {
+                    const exName = ex.name;
+                    // We need to match exercise name to index in schedule to generate keys properly? 
+                    // To simplify: we assume the 'dayKey' (senin/selasa) matches schedule
+                    // If user changed routine type, this might be tricky. 
+                    // Simplified: We reload the routine type stored in entry
+                });
+                
+                // Set Dropdown to Saved Day Key
+                document.getElementById('modal-routine-select').value = existingEntry.dayKey;
+                
+                // Reconstruct tempModalData from entry
+                const dayKey = existingEntry.dayKey;
+                const exercisesList = schedule[dayKey].exercises;
+                
+                existingEntry.data.forEach(savedEx => {
+                    // Find index in current schedule
+                    const idx = exercisesList.indexOf(savedEx.name);
+                    if(idx > -1) {
+                        const baseKey = `${dayKey}_${idx}`;
+                        savedEx.sets.forEach(s => {
+                            tempModalData[`${baseKey}_s${s.set}w`] = s.w;
+                            tempModalData[`${baseKey}_s${s.set}r`] = s.r;
+                        });
+                    }
+                });
+
+            } else {
+                // NEW ENTRY
+                tempModalData = {};
+                // Auto-select routine based on day of week
+                const dayNum = selectedModalDate.getDay(); // 0=Sun, 1=Mon
+                const dayMap = { 1:'senin', 2:'selasa', 3:'rabu', 4:'kamis', 5:'jumat', 6:'sabtu', 0:'minggu' };
+                let suggestedDay = dayMap[dayNum];
+                if(!schedule[suggestedDay]) suggestedDay = 'senin'; // Default fallback
+                document.getElementById('modal-routine-select').value = suggestedDay;
+            }
+
+            renderModalForm();
+
+            // Show Modal
+            const modal = document.getElementById('entry-modal');
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                modal.querySelector('div').classList.remove('translate-y-full', 'scale-95');
+            }, 10);
+        }
+
+        function closeEntryModal() {
+            const modal = document.getElementById('entry-modal');
+            modal.classList.add('opacity-0');
+            modal.querySelector('div').classList.add('translate-y-full', 'scale-95');
+            setTimeout(() => modal.classList.add('hidden'), 300);
+        }
+
+        function renderModalForm() {
+            const routineKey = document.getElementById('modal-routine-select').value;
+            // Render into modal container, using tempModalData, NO auto-save to localstorage
+            renderWorkout(routineKey, 'modal-form-container', tempModalData, false);
+        }
+
+        function saveEntryFromModal() {
+            const routineKey = document.getElementById('modal-routine-select').value;
+            const dataDef = schedule[routineKey];
+            
+            // Build Entry Object
+            const entry = {
+                id: selectedModalDate.getTime(), // ID based on chosen date
+                date: selectedModalDate.toISOString(),
+                dayKey: routineKey,
+                dayTitle: dataDef.title,
+                data: []
+            };
+
+            let hasData = false;
+            dataDef.exercises.forEach((ex, idx) => {
+                const k = `${routineKey}_${idx}`;
+                const sets = [];
+                for(let i=1; i<=3; i++) {
+                    const w = parseFloat(tempModalData[`${k}_s${i}w`]) || 0;
+                    const r = parseInt(tempModalData[`${k}_s${i}r`]) || 0;
+                    if(w > 0 || r > 0) sets.push({ set: i, w: w, r: r });
+                }
+                if(sets.length > 0) {
+                    entry.data.push({ name: ex, sets: sets });
+                    hasData = true;
+                }
             });
-            const activeBtn = document.getElementById(`btn-${day}`);
-            activeBtn.classList.remove('bg-slate-700', 'text-slate-300');
-            activeBtn.classList.add('bg-blue-600', 'text-white', 'font-semibold');
 
-            renderWorkout(day);
+            if(!hasData) {
+                if(!confirm("Data kosong. Apakah Anda ingin menyimpan entri kosong (atau menghapus jika sudah ada)?")) return;
+            }
+
+            // Remove existing entry for this date if exists (Overwrite)
+            const dateStr = selectedModalDate.toDateString();
+            historyData = historyData.filter(h => new Date(h.date).toDateString() !== dateStr);
+            
+            // Add new if has data
+            if(hasData) {
+                historyData.push(entry);
+                // Sort history by date descending
+                historyData.sort((a,b) => new Date(b.date) - new Date(a.date));
+            }
+
+            localStorage.setItem('gymTrackerHistory', JSON.stringify(historyData));
+            
+            // Sync
+            if(hasData) syncToCloud(entry);
+
+            renderCalendar();
+            updateChart(); // Update graph if data changed
+            closeEntryModal();
+            showToast("Jurnal diperbarui!");
         }
 
-        function renderWorkout(day) {
-            const container = document.getElementById('workout-container');
+
+        // --- GENERIC RENDER FUNCTION (Used by both Main Tracker & Modal) ---
+        function renderWorkout(day, containerId, dataSource, isAutoSave) {
+            const container = document.getElementById(containerId);
             const data = schedule[day];
-            
+            if(!data) { container.innerHTML = "<p class='text-center text-slate-500'>Tidak ada jadwal rutin.</p>"; return; }
+
             let html = `
                 <div class="flex justify-between items-end mb-4 border-b border-slate-700 pb-2">
-                    <h2 class="text-2xl font-bold text-white">${data.title}</h2>
-                    <span class="text-xs uppercase tracking-widest text-slate-500 font-bold">${day}</span>
-                </div>
-            `;
+                    <h2 class="text-lg font-bold text-white">${data.title}</h2>
+                    <span class="text-blue-400 font-semibold text-xs capitalize bg-blue-400/10 px-2 py-1 rounded">${day}</span>
+                </div>`;
 
             data.exercises.forEach((ex, index) => {
-                const exKey = `${day}_${index}`; // Unique ID for storage
-                
-                // Get saved values or empty string
-                const s1w = workoutData[`${exKey}_s1w`] || '';
-                const s1r = workoutData[`${exKey}_s1r`] || '';
-                const s2w = workoutData[`${exKey}_s2w`] || '';
-                const s2r = workoutData[`${exKey}_s2r`] || '';
-                const s3w = workoutData[`${exKey}_s3w`] || '';
-                const s3r = workoutData[`${exKey}_s3r`] || '';
+                const exKey = `${day}_${index}`;
+                // Access data from provided dataSource
+                const s1w = dataSource[`${exKey}_s1w`] || ''; const s1r = dataSource[`${exKey}_s1r`] || '';
+                const s2w = dataSource[`${exKey}_s2w`] || ''; const s2r = dataSource[`${exKey}_s2r`] || '';
+                const s3w = dataSource[`${exKey}_s3w`] || ''; const s3r = dataSource[`${exKey}_s3r`] || '';
+
+                // OnInput Handler String
+                // If autoSave (Main Tracker): call saveInput()
+                // If Modal: call updateTempData()
+                const handler = isAutoSave ? "saveInput" : "updateTempData";
 
                 html += `
-                <div class="bg-slate-800 rounded-xl p-4 shadow-md border border-slate-700/50">
-                    <div class="flex justify-between items-center mb-3">
-                        <h3 class="font-medium text-slate-200 text-lg">${index + 1}. ${ex}</h3>
+                <div class="bg-slate-800 rounded-xl p-3 shadow border border-slate-700/50">
+                    <h3 class="font-bold text-slate-200 text-sm mb-2 border-l-2 border-blue-500 pl-2">${ex}</h3>
+                    <div class="grid grid-cols-12 gap-2 text-center text-[10px] text-slate-500 font-bold mb-1 uppercase tracking-wider">
+                        <div class="col-span-2">Set</div>
+                        <div class="col-span-5">Kg</div>
+                        <div class="col-span-5">Reps</div>
                     </div>
-                    
-                    <div class="grid grid-cols-4 gap-2 text-center text-xs text-slate-500 font-bold mb-1 uppercase tracking-wider">
-                        <div>Set</div>
-                        <div class="col-span-3">Log (Kg x Reps)</div>
-                    </div>
-
-                    <!-- Set 1 -->
-                    <div class="grid grid-cols-4 gap-2 items-center mb-2">
-                        <div class="bg-slate-700/50 py-2 rounded text-slate-400 font-bold text-center text-sm">SET 1</div>
-                        <div class="col-span-3 flex gap-1">
-                            <input type="number" placeholder="Kg" value="${s1w}" oninput="saveInput('${exKey}_s1w', this.value)" class="w-1/2 bg-slate-900 border border-slate-600 rounded p-2 text-center text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder-slate-600">
-                            <input type="number" placeholder="Reps" value="${s1r}" oninput="saveInput('${exKey}_s1r', this.value)" class="w-1/2 bg-slate-900 border border-slate-600 rounded p-2 text-center text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder-slate-600">
-                        </div>
-                    </div>
-
-                    <!-- Set 2 -->
-                    <div class="grid grid-cols-4 gap-2 items-center mb-2">
-                        <div class="bg-slate-700/50 py-2 rounded text-slate-400 font-bold text-center text-sm">SET 2</div>
-                        <div class="col-span-3 flex gap-1">
-                            <input type="number" placeholder="Kg" value="${s2w}" oninput="saveInput('${exKey}_s2w', this.value)" class="w-1/2 bg-slate-900 border border-slate-600 rounded p-2 text-center text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder-slate-600">
-                            <input type="number" placeholder="Reps" value="${s2r}" oninput="saveInput('${exKey}_s2r', this.value)" class="w-1/2 bg-slate-900 border border-slate-600 rounded p-2 text-center text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder-slate-600">
-                        </div>
-                    </div>
-
-                    <!-- Set 3 -->
-                    <div class="grid grid-cols-4 gap-2 items-center">
-                        <div class="bg-slate-700/50 py-2 rounded text-slate-400 font-bold text-center text-sm">SET 3</div>
-                        <div class="col-span-3 flex gap-1">
-                            <input type="number" placeholder="Kg" value="${s3w}" oninput="saveInput('${exKey}_s3w', this.value)" class="w-1/2 bg-slate-900 border border-slate-600 rounded p-2 text-center text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder-slate-600">
-                            <input type="number" placeholder="Reps" value="${s3r}" oninput="saveInput('${exKey}_s3r', this.value)" class="w-1/2 bg-slate-900 border border-slate-600 rounded p-2 text-center text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder-slate-600">
-                        </div>
-                    </div>
-                </div>
-                `;
+                    ${renderRowGen(1, s1w, s1r, exKey, handler)}
+                    ${renderRowGen(2, s2w, s2r, exKey, handler)}
+                    ${renderRowGen(3, s3w, s3r, exKey, handler)}
+                </div>`;
             });
-
             container.innerHTML = html;
         }
 
+        function renderRowGen(setNum, w, r, key, handlerFnName) {
+            return `
+            <div class="grid grid-cols-12 gap-2 items-center mb-1">
+                <div class="col-span-2 bg-slate-700/50 py-1 rounded text-slate-400 font-bold text-center text-xs">${setNum}</div>
+                <div class="col-span-5">
+                    <input type="number" placeholder="-" value="${w}" oninput="${handlerFnName}('${key}_s${setNum}w', this.value)" class="w-full bg-slate-900 border border-slate-600 rounded p-1.5 text-center text-white focus:border-blue-500 outline-none text-sm">
+                </div>
+                <div class="col-span-5">
+                    <input type="number" placeholder="-" value="${r}" oninput="${handlerFnName}('${key}_s${setNum}r', this.value)" class="w-full bg-slate-900 border border-slate-600 rounded p-1.5 text-center text-white focus:border-blue-500 outline-none text-sm">
+                </div>
+            </div>`;
+        }
+
+        // --- DATA HANDLERS ---
         function saveInput(key, value) {
             workoutData[key] = value;
             localStorage.setItem('gymTrackerData', JSON.stringify(workoutData));
         }
 
-        function downloadCSV() {
-            let csvContent = "data:text/csv;charset=utf-8,";
-            csvContent += "Hari,Gerakan,Set,Berat (kg),Repetisi\n";
+        function updateTempData(key, value) {
+            tempModalData[key] = value;
+        }
 
-            const days = ['senin', 'selasa', 'kamis', 'jumat'];
+        // --- SYNC & TOAST (Reused) ---
+        function saveConfig() {
+            const url = document.getElementById('script-url-input').value.trim();
+            if(url) { localStorage.setItem('gymScriptUrl', url); SCRIPT_URL = url; document.getElementById('config-section').classList.add('hidden'); showToast("URL tersimpan!"); }
+        }
+        function toggleConfig() { document.getElementById('config-section').classList.toggle('hidden'); document.getElementById('script-url-input').value = SCRIPT_URL; }
+
+        async function syncToCloud(entry) {
+            if (!SCRIPT_URL) return;
+            const flatData = [];
+            const timestamp = new Date(entry.date).toLocaleString('id-ID');
+            entry.data.forEach(ex => { ex.sets.forEach(s => { flatData.push({ timestamp: timestamp, day: entry.dayTitle, exercise: ex.name, set: s.set, weight: s.w, reps: s.r }); }); });
             
-            days.forEach(day => {
-                const dayTitle = schedule[day].title;
-                schedule[day].exercises.forEach((ex, idx) => {
-                    const exKey = `${day}_${idx}`;
-                    for(let i=1; i<=3; i++) {
-                        const weight = workoutData[`${exKey}_s${i}w`] || '-';
-                        const reps = workoutData[`${exKey}_s${i}r`] || '-';
-                        // Clean text for CSV
-                        const cleanEx = ex.replace(/,/g, " "); 
-                        csvContent += `${day.toUpperCase()},${cleanEx},Set ${i},${weight},${reps}\n`;
+            showToast("Syncing...", false, true);
+            try {
+                await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: "add_entry", data: flatData }) });
+                showToast("Terkirim ke Cloud!");
+            } catch (error) { showToast("Gagal Sync", true); }
+        }
+
+        async function syncAllData() {
+            if (!historyData.length || !confirm("Sync ulang SEMUA?")) return;
+            for (const entry of historyData) { await syncToCloud(entry); await new Promise(r => setTimeout(r, 300)); }
+            showToast("Selesai!");
+        }
+
+        function showToast(msg, isError = false, isProcessing = false) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-msg').innerText = msg;
+            toast.classList.remove('opacity-0');
+            if(!isProcessing) setTimeout(() => toast.classList.add('opacity-0'), 3000);
+        }
+
+        // --- OLD UI HANDLERS ---
+        function switchView(viewName) {
+            document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`view-${viewName}`).classList.remove('hidden');
+            document.querySelectorAll('.nav-btn').forEach(btn => { btn.classList.remove('bg-blue-600', 'text-white'); btn.classList.add('text-slate-400'); });
+            document.getElementById(`nav-${viewName}`).classList.add('bg-blue-600', 'text-white');
+            document.getElementById(`nav-${viewName}`).classList.remove('text-slate-400');
+            
+            const dayNav = document.getElementById('day-nav');
+            viewName === 'tracker' ? dayNav.classList.remove('hidden') : dayNav.classList.add('hidden');
+
+            if (viewName === 'journal') renderCalendar();
+            if (viewName === 'graph') { populateExerciseSelect(); updateChart(); }
+        }
+
+        function switchDayTab(day) {
+            currentDay = day;
+            document.querySelectorAll('.tab-btn').forEach(btn => { btn.classList.remove('bg-blue-600', 'text-white', 'font-semibold', 'shadow-md'); btn.classList.add('bg-slate-700', 'text-slate-300'); });
+            document.getElementById(`btn-${day}`).classList.add('bg-blue-600', 'text-white', 'font-semibold', 'shadow-md');
+            document.getElementById(`btn-${day}`).classList.remove('bg-slate-700', 'text-slate-300');
+            renderWorkout(currentDay, 'workout-container', workoutData, true);
+        }
+
+        // --- SAVE TODAY HANDLERS ---
+        function openSaveModal() {
+            document.getElementById('modal-day-name').innerText = currentDay;
+            const m = document.getElementById('custom-save-modal'); m.classList.remove('hidden'); setTimeout(()=>m.classList.remove('opacity-0'),10);
+        }
+        function closeSaveModal() {
+            const m = document.getElementById('custom-save-modal'); m.classList.add('opacity-0'); setTimeout(()=>m.classList.add('hidden'),300);
+        }
+        function saveToJournal() {
+            let hasData = false;
+            schedule[currentDay].exercises.forEach((ex, idx) => { for(let i=1; i<=3; i++) { if(workoutData[`${currentDay}_${idx}_s${i}w`] || workoutData[`${currentDay}_${idx}_s${i}r`]) hasData = true; }});
+            if(!hasData) { showToast("Data kosong!", true); return; }
+            openSaveModal();
+        }
+        function executeSave() {
+            closeSaveModal();
+            const today = new Date();
+            // Reuse modal logic logic but with today's date and global workoutData
+            selectedModalDate = today;
+            tempModalData = {...workoutData}; // Copy global to temp
+            document.getElementById('modal-routine-select').value = currentDay; // Fake element value for logic
+            
+            // Hacky but reuses the saveEntryFromModal logic which handles history pushing and syncing
+            saveEntryFromModal(); 
+        }
+
+        function clearHistory() { if(confirm("Hapus data lokal?")) { historyData = []; localStorage.setItem('gymTrackerHistory', JSON.stringify(historyData)); renderCalendar(); updateChart(); } }
+
+        // --- GRAPH ---
+        function populateExerciseSelect() {
+            const select = document.getElementById('exercise-select');
+            let allEx = []; Object.values(schedule).forEach(day => allEx = [...allEx, ...day.exercises]); allEx = [...new Set(allEx)];
+            const cur = select.value; select.innerHTML = allEx.map(ex => `<option value="${ex}">${ex}</option>`).join('');
+            if(cur && allEx.includes(cur)) select.value = cur;
+        }
+
+        function updateChart() {
+            const selectedExercise = document.getElementById('exercise-select').value;
+            const ctx = document.getElementById('progressChart').getContext('2d');
+            const chronologicalData = [...historyData].sort((a,b) => new Date(a.date) - new Date(b.date)); // Sort Oldest to Newest
+            const labels = []; const dataPoints = [];
+
+            chronologicalData.forEach(entry => {
+                const exEntry = entry.data.find(d => d.name === selectedExercise);
+                if (exEntry) {
+                    const maxWeight = Math.max(...exEntry.sets.map(s => parseFloat(s.w) || 0));
+                    if (maxWeight > 0) {
+                        labels.push(new Date(entry.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }));
+                        dataPoints.push(maxWeight);
                     }
-                });
+                }
             });
 
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", "gym_tracker_data.csv");
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            if (chartInstance) chartInstance.destroy();
+            chartInstance = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Beban Max (kg)', data: dataPoints, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', borderWidth: 3, pointBackgroundColor: '#fff', pointBorderColor: '#3b82f6', tension: 0.3, fill: true }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: '#334155' }, ticks: { color: '#94a3b8' } }, x: { grid: { display: false }, ticks: { color: '#94a3b8' } } } } });
         }
 
-        function confirmReset() {
-            if(confirm("Yakin ingin menghapus semua data latihan?")) {
-                localStorage.removeItem('gymTrackerData');
-                workoutData = {};
-                renderWorkout(currentDay);
-            }
-        }
-
-        // Start
         init();
-
     </script>
 </body>
 </html>

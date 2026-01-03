@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gym Tracker - Progressive Overload</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        /* Hilangkan panah pada input number */
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen pb-20">
+
+    <!-- Header -->
+    <header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-50 shadow-lg">
+        <div class="max-w-3xl mx-auto px-4 py-4 flex justify-between items-center">
+            <div>
+                <h1 class="text-xl font-bold text-blue-400"><i class="fas fa-dumbbell mr-2"></i>Gym Tracker</h1>
+                <p class="text-xs text-slate-400">Target: 6-8 Reps (Berat)</p>
+            </div>
+            <button onclick="downloadCSV()" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm transition font-medium">
+                <i class="fas fa-file-excel mr-1"></i> Save Excel
+            </button>
+        </div>
+        
+        <!-- Day Navigation -->
+        <div class="flex overflow-x-auto bg-slate-800 pb-2 px-2 gap-2 hide-scrollbar justify-start md:justify-center">
+            <button onclick="switchTab('senin')" id="btn-senin" class="tab-btn px-4 py-2 rounded-full text-sm whitespace-nowrap bg-blue-600 text-white font-semibold">Senin (Back)</button>
+            <button onclick="switchTab('selasa')" id="btn-selasa" class="tab-btn px-4 py-2 rounded-full text-sm whitespace-nowrap bg-slate-700 text-slate-300">Selasa (Bahu)</button>
+            <button onclick="switchTab('kamis')" id="btn-kamis" class="tab-btn px-4 py-2 rounded-full text-sm whitespace-nowrap bg-slate-700 text-slate-300">Kamis (Chest)</button>
+            <button onclick="switchTab('jumat')" id="btn-jumat" class="tab-btn px-4 py-2 rounded-full text-sm whitespace-nowrap bg-slate-700 text-slate-300">Jumat (Leg)</button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-3xl mx-auto px-4 py-6">
+        
+        <div id="workout-container" class="space-y-6">
+            <!-- Content Injected via JS -->
+        </div>
+
+        <!-- Note -->
+        <div class="mt-8 p-4 bg-slate-800 rounded-lg border border-slate-700 text-sm text-slate-400">
+            <p class="font-bold text-slate-200 mb-1"><i class="fas fa-info-circle text-blue-400 mr-1"></i> Tips Progressive Overload:</p>
+            <ul class="list-disc list-inside space-y-1 ml-1">
+                <li>Jika bisa angkat > 8 reps dengan mudah, <strong>tambah beban</strong> minggu depan.</li>
+                <li>Istirahat 90-120 detik antar set.</li>
+                <li>Fokus pada teknik (Form) sebelum berat beban.</li>
+            </ul>
+        </div>
+
+        <!-- Reset Button -->
+        <div class="mt-8 text-center">
+             <button onclick="confirmReset()" class="text-red-400 text-xs hover:text-red-300 underline">Reset Semua Data</button>
+        </div>
+    </main>
+
+    <script>
+        // Data Structure based on User Prompt
+        const schedule = {
+            senin: {
+                title: "Back & Triceps",
+                exercises: [
+                    "Pemanasan (Stretching)",
+                    "Lat Pull Down",
+                    "Rowing Bar (bisa + Trap)",
+                    "Lat Pull Over (Grip Lebar)",
+                    "Tricep: Skull Crusher",
+                    "Tricep: Cable Pushdown"
+                ]
+            },
+            selasa: {
+                title: "Shoulders & Forearm",
+                exercises: [
+                    "Shoulder Press (Depan)",
+                    "Cable Lateral Raise",
+                    "Face Pull (Bahu Belakang)",
+                    "Forearm Curl (Depan)",
+                    "Reverse Wrist Curl (Belakang)"
+                ]
+            },
+            kamis: {
+                title: "Chest & Biceps",
+                exercises: [
+                    "Flat Bench (Dumbbell/Smith)",
+                    "Incline Bench",
+                    "Cable Fly",
+                    "Dumbbell Fly",
+                    "Bicep Curl V1",
+                    "Bicep Curl V2 (Hammer)"
+                ]
+            },
+            jumat: {
+                title: "Legs & Abs",
+                exercises: [
+                    "Squat",
+                    "Leg Extension",
+                    "Hamstring Curl",
+                    "Hip Dips / Glutes",
+                    "Calf Raise",
+                    "Abs (Perut)"
+                ]
+            }
+        };
+
+        let currentDay = 'senin';
+        let workoutData = JSON.parse(localStorage.getItem('gymTrackerData')) || {};
+
+        // Initialize
+        function init() {
+            renderWorkout(currentDay);
+        }
+
+        function switchTab(day) {
+            currentDay = day;
+            
+            // Update Tab Styles
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('bg-blue-600', 'text-white', 'font-semibold');
+                btn.classList.add('bg-slate-700', 'text-slate-300');
+            });
+            const activeBtn = document.getElementById(`btn-${day}`);
+            activeBtn.classList.remove('bg-slate-700', 'text-slate-300');
+            activeBtn.classList.add('bg-blue-600', 'text-white', 'font-semibold');
+
+            renderWorkout(day);
+        }
+
+        function renderWorkout(day) {
+            const container = document.getElementById('workout-container');
+            const data = schedule[day];
+            
+            let html = `
+                <div class="flex justify-between items-end mb-4 border-b border-slate-700 pb-2">
+                    <h2 class="text-2xl font-bold text-white">${data.title}</h2>
+                    <span class="text-xs uppercase tracking-widest text-slate-500 font-bold">${day}</span>
+                </div>
+            `;
+
+            data.exercises.forEach((ex, index) => {
+                const exKey = `${day}_${index}`; // Unique ID for storage
+                
+                // Get saved values or empty string
+                const s1w = workoutData[`${exKey}_s1w`] || '';
+                const s1r = workoutData[`${exKey}_s1r`] || '';
+                const s2w = workoutData[`${exKey}_s2w`] || '';
+                const s2r = workoutData[`${exKey}_s2r`] || '';
+                const s3w = workoutData[`${exKey}_s3w`] || '';
+                const s3r = workoutData[`${exKey}_s3r`] || '';
+
+                html += `
+                <div class="bg-slate-800 rounded-xl p-4 shadow-md border border-slate-700/50">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="font-medium text-slate-200 text-lg">${index + 1}. ${ex}</h3>
+                    </div>
+                    
+                    <div class="grid grid-cols-4 gap-2 text-center text-xs text-slate-500 font-bold mb-1 uppercase tracking-wider">
+                        <div>Set</div>
+                        <div class="col-span-3">Log (Kg x Reps)</div>
+                    </div>
+
+                    <!-- Set 1 -->
+                    <div class="grid grid-cols-4 gap-2 items-center mb-2">
+                        <div class="bg-slate-700/50 py-2 rounded text-slate-400 font-bold text-center text-sm">SET 1</div>
+                        <div class="col-span-3 flex gap-1">
+                            <input type="number" placeholder="Kg" value="${s1w}" oninput="saveInput('${exKey}_s1w', this.value)" class="w-1/2 bg-slate-900 border border-slate-600 rounded p-2 text-center text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder-slate-600">
+                            <input type="number" placeholder="Reps" value="${s1r}" oninput="saveInput('${exKey}_s1r', this.value)" class="w-1/2 bg-slate-900 border border-slate-600 rounded p-2 text-center text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder-slate-600">
+                        </div>
+                    </div>
+
+                    <!-- Set 2 -->
+                    <div class="grid grid-cols-4 gap-2 items-center mb-2">
+                        <div class="bg-slate-700/50 py-2 rounded text-slate-400 font-bold text-center text-sm">SET 2</div>
+                        <div class="col-span-3 flex gap-1">
+                            <input type="number" placeholder="Kg" value="${s2w}" oninput="saveInput('${exKey}_s2w', this.value)" class="w-1/2 bg-slate-900 border border-slate-600 rounded p-2 text-center text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder-slate-600">
+                            <input type="number" placeholder="Reps" value="${s2r}" oninput="saveInput('${exKey}_s2r', this.value)" class="w-1/2 bg-slate-900 border border-slate-600 rounded p-2 text-center text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder-slate-600">
+                        </div>
+                    </div>
+
+                    <!-- Set 3 -->
+                    <div class="grid grid-cols-4 gap-2 items-center">
+                        <div class="bg-slate-700/50 py-2 rounded text-slate-400 font-bold text-center text-sm">SET 3</div>
+                        <div class="col-span-3 flex gap-1">
+                            <input type="number" placeholder="Kg" value="${s3w}" oninput="saveInput('${exKey}_s3w', this.value)" class="w-1/2 bg-slate-900 border border-slate-600 rounded p-2 text-center text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder-slate-600">
+                            <input type="number" placeholder="Reps" value="${s3r}" oninput="saveInput('${exKey}_s3r', this.value)" class="w-1/2 bg-slate-900 border border-slate-600 rounded p-2 text-center text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder-slate-600">
+                        </div>
+                    </div>
+                </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function saveInput(key, value) {
+            workoutData[key] = value;
+            localStorage.setItem('gymTrackerData', JSON.stringify(workoutData));
+        }
+
+        function downloadCSV() {
+            let csvContent = "data:text/csv;charset=utf-8,";
+            csvContent += "Hari,Gerakan,Set,Berat (kg),Repetisi\n";
+
+            const days = ['senin', 'selasa', 'kamis', 'jumat'];
+            
+            days.forEach(day => {
+                const dayTitle = schedule[day].title;
+                schedule[day].exercises.forEach((ex, idx) => {
+                    const exKey = `${day}_${idx}`;
+                    for(let i=1; i<=3; i++) {
+                        const weight = workoutData[`${exKey}_s${i}w`] || '-';
+                        const reps = workoutData[`${exKey}_s${i}r`] || '-';
+                        // Clean text for CSV
+                        const cleanEx = ex.replace(/,/g, " "); 
+                        csvContent += `${day.toUpperCase()},${cleanEx},Set ${i},${weight},${reps}\n`;
+                    }
+                });
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "gym_tracker_data.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function confirmReset() {
+            if(confirm("Yakin ingin menghapus semua data latihan?")) {
+                localStorage.removeItem('gymTrackerData');
+                workoutData = {};
+                renderWorkout(currentDay);
+            }
+        }
+
+        // Start
+        init();
+
+    </script>
+</body>
+</html>
